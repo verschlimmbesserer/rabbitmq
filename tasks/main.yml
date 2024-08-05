@@ -1,0 +1,31 @@
+---
+
+- name: Configure Repository for RabbitMQ
+  ansible.builtin.include_tasks: repo.yml
+  tags: repository
+
+- name: Install RabbitMQ
+  ansible.builtin.include_tasks: packages.yml
+  tags: packages
+
+- name: Configure RabbitMQ Cluster Config
+  ansible.builtin.include_tasks: config-cluster.yml
+  when: rabbitmq_create_cluster
+
+- name: Configure RabbitMQ
+  ansible.builtin.include_tasks: config.yml
+
+- name: Start RabbitMQ Service
+  ansible.builtin.include_tasks: service.yml
+
+- name: Configure RabbitMQ Cluster
+  ansible.builtin.include_tasks: cluster.yml
+  when: (rabbitmq_create_cluster == true) and ( ansible_fqdn != rabbitmq_cluster_master_fqdn )
+
+- name: Create RabbitMQ Resources
+  ansible.builtin.include_tasks: rabbitmq.yml
+  when: 'not rabbitmq_create_cluster or (ansible_fqdn == rabbitmq_cluster_master_fqdn)'
+
+- name: Flash handlers
+  ansible.builtin.include_tasks: Force all notified handlers to run at this point, not waiting for normal sync points
+  meta: flush_handlers

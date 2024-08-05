@@ -1,0 +1,33 @@
+---
+
+- name: Get /var/lib/rabbitmq/.erlang.cookie permissions
+  ansible.builtin.stat:
+    path: /var/lib/rabbitmq/.erlang.cookie
+  register: erlang_cookie_stat
+
+- name: Backup old erlang cookie
+  ansible.builtin.copy:
+    src: /var/lib/rabbitmq/.erlang.cookie
+    dest: /var/lib/rabbitmq/.erlang.cookie.old
+    remote_src: true
+    owner: "{{ erlang_cookie_stat.pw_name }}"
+    group: "{{ erlang_cookie_stat.gr_name }}"
+    mode: "{{ erlang_cookie_stat.mode }}"
+  when: ansible_fqdn != rabbitmq_cluster_master_fqdn
+
+- name: Remove erlang cookie
+  ansible.builtin.file:
+    path: /var/lib/rabbitmq/.erlang.cookie
+    state: absent
+  when: ansible_fqdn != rabbitmq_cluster_master_fqdn
+
+- name: Sync erlang cookie
+  ansible.posix.synchronize:
+    src: /var/lib/rabbitmq/.erlang.cookie
+    dest: /var/lib/rabbitmq/.erlang.cookie
+    checksum: true
+  delegate_to: "{{ rabbitmq_cluster_master_fqdn }}"
+  when: rabbitmq_create_cluster and ansible_fqdn != rabbitmq_cluster_master_fqdn
+
+- name: Force all notified handlers to run at this point, not waiting for normal sync points
+  ansible.builtin.meta: flush_handlers

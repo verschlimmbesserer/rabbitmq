@@ -1,0 +1,62 @@
+---
+
+- name: Get cksum of /var/lib/rabbitmq/.erlang.cookie.old
+  ansible.builtin.stat:
+    path: "/var/lib/rabbitmq/.erlang.cookie"
+  register: myfirstfile
+
+- name: Get cksum of /var/lib/rabbitmq/.erlang.cookie.old
+  ansible.builtin.stat:
+    path: "/var/lib/rabbitmq/.erlang.cookie.old"
+  register: mysecondfile
+
+- name: Current SHA1
+  ansible.builtin.set_fact:
+    mf1sha1: "{{ myfirstfile.stat.checksum }}"
+
+- name: Current SHA1
+  ansible.builtin.set_fact:
+    mf2sha1: "{{ mysecondfile.stat.checksum }}"
+
+- name: Configure rabbitmq cluster
+  when: mf1sha1 != mf2sha1
+  block:
+    - name: Restart rabbitmq server
+      ansible.builtin.systemd_service:
+        name: rabbitmq-server
+        state: restarted
+
+    - name: Stop rabbitmq app
+      ansible.builtin.shell:
+        cmd: rabbitmqctl stop_app
+        executable: /bin/bash
+      register: rabbitmq_stop
+      changed_when: rabbitmq_stop.rc != 0
+
+    - name: Reset rabbitmq app
+      ansible.builtin.shell:
+        cmd: rabbitmqctl reset
+        executable: /bin/bash
+      register: rabbitmq_reset
+      changed_when: rabbitmq_reset.rc != 0
+
+    - name: Add this node to cluster
+      ansible.builtin.shell:
+        cmd: rabbitmqctl join_cluster rabbit@{{ rabbitmq_cluster_master }}
+        executable: /bin/bash
+      register: join_cluster_output
+      ignore_errors: true
+      changed_when: join_cluster_output.rc != 0
+
+    - name: Skip fail if the node is already a member of the cluster
+      ansible.builtin.fail:
+        msg: "join_cluster failed but node is not already a member"
+      when: ("'already_member' not in join_cluster_output.stderr") and
+            (join_cluster_output.rc != 0)
+
+    - name: Start rabbitmq app
+      ansible.builtin.shell:
+        cmd: rabbitmqctl start_app
+        executable: /bin/bash
+      register: rabbitmq_start
+      changed_when: rabbitmq_start.rc != 0

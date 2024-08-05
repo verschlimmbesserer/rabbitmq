@@ -1,0 +1,14 @@
+---
+
+- name: Add repokey for rabbitmq ubuntu
+  ansible.builtin.apt_key:
+    url: "{{ item }}"
+    state: present
+  loop: "{{ rabbitmq_repo_keys }}"
+
+- name: Add rabbitmq repo ubuntu
+  ansible.builtin.apt_repository:
+    repo: "{{ rabbitmq_repo }}"
+    state: present
+    update_cache: true
+    filename: rabbitmq
